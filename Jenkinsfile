@@ -14,7 +14,8 @@ pipeline {
 
     environment {
         APP_NAME        = 'inspection-fe'
-        ENVIRONMENT     = 'production'
+        // Docker image alias only (not a Platform CD parameter).
+        IMAGE_ALIAS     = 'production'
 
         REPO_URL        = 'https://github.com/ankittyagi140/euroasiasci_inspection_FE.git'
         GIT_BRANCH      = 'release'
@@ -29,7 +30,8 @@ pipeline {
         // Prefixed so a dev job with the same build number cannot overwrite this image.
         IMAGE_TAG       = "prod-${BUILD_NUMBER}"
 
-        PLATFORM_JOB    = 'EUROASIA_SCI_CLIENT_PORTAL/Euroasia_Inspection/Euroasia_inspection_Infra/Euroasia_inspection_Infra'
+        // Platform CD prod job (Jenkinsfile.prod hardcodes ENVIRONMENT=prod).
+        PLATFORM_JOB    = 'EUROASIA_SCI_CLIENT_PORTAL/Euroasia_Inspection/Euroasia_inspection_Infra/Euroasia_inspection_Infra_PRODUCTION'
     }
 
     stages {
@@ -93,7 +95,7 @@ pipeline {
                     --label org.opencontainers.image.source=${REPO_URL} \
                     -f ${DOCKERFILE} \
                     -t ${IMAGE}:${IMAGE_TAG} \
-                    -t ${IMAGE}:${ENVIRONMENT} \
+                    -t ${IMAGE}:${IMAGE_ALIAS} \
                     .
                 '''
             }
@@ -122,7 +124,7 @@ pipeline {
                 sh '''
                 set -eux
                 docker push ${IMAGE}:${IMAGE_TAG}
-                docker push ${IMAGE}:${ENVIRONMENT}
+                docker push ${IMAGE}:${IMAGE_ALIAS}
                 '''
             }
         }
@@ -131,22 +133,24 @@ pipeline {
             steps {
                 script {
                     echo '========================================='
-                    echo 'Triggering Platform Deployment...'
+                    echo 'Triggering Platform Deployment (PRODUCTION)...'
                     echo "Application : ${APP_NAME}"
-                    echo "Environment : ${ENVIRONMENT}"
+                    echo "Environment : prod (fixed by Platform Jenkinsfile.prod)"
                     echo "Image Tag   : ${IMAGE_TAG}"
+                    echo "Platform Job: ${PLATFORM_JOB}"
                     echo '========================================='
 
+                    // Do not pass ENVIRONMENT — prod infra job has no such param (env is always prod).
                     build(
                         job: "${PLATFORM_JOB}",
                         wait: true,
                         propagate: true,
                         parameters: [
                             string(name: 'APPLICATION', value: "${APP_NAME}"),
-                            string(name: 'ENVIRONMENT', value: "${ENVIRONMENT}"),
                             string(name: 'IMAGE_TAG', value: "${IMAGE_TAG}"),
                             booleanParam(name: 'DRY_RUN', value: false),
                             booleanParam(name: 'SKIP_HEALTH_CHECK', value: false),
+                            booleanParam(name: 'SYNC_NGINX', value: false),
                         ]
                     )
                 }
